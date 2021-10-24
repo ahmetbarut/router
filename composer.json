@@ -1,0 +1,29 @@
+{
+    "name": "ahmetbarut/php-router",
+    "type": "library",
+    "license": "MIT",
+    "description": "Php simple use router",
+    "autoload": {
+        "psr-4": {
+            "ahmetbarut\\PhpRouter\\": "src/"
+        },
+        "files": [
+            "src/Helper/helpers.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "tests\\": "tests/",
+            "App\\": "app/"
+        }
+    },
+    "authors": [{
+        "name": "Ahmet Barut",
+        "email": "ahmetbarut588@gmail.com"
+    }],
+    "minimum-stability": "dev",
+    "require-dev": {
+        "symfony/var-dumper": "*",
+        "phpunit/phpunit": "10.0.x-dev"
+    }
+}
