@@ -7,10 +7,13 @@ namespace ahmetbarut\PhpRouter\Router;
 use ahmetbarut\PhpRouter\{
     Exception\NotRouteFound,
     Reflection\Method,
-    Request\Request
 };
+use ahmetbarut\PhpRouter\Reflection\CallController;
+use Symfony\Component\HttpFoundation\Request;
+
 use Closure;
 use ReflectionFunction;
+use Symfony\Component\HttpFoundation\Response;
 
 class Router
 {
@@ -69,9 +72,8 @@ class Router
     public function __construct($options = [])
     {
         $this->route = new Route;
-
-        $this->request = new Request;
-
+        $this->request = Request::createFromGlobals();
+        
         if (!empty($options)) {
             if (array_key_exists('namespace', $options)) {
                 $this->namespace = $options['namespace'];
@@ -185,7 +187,9 @@ class Router
      */
     public function run()
     {
-        if (!in_array($this->request->method, array_keys($this->router))) {
+        $response = new Response();
+        
+        if (!in_array($this->request->getMethod(), array_keys($this->router))) {
             http_response_code(405);
 
             header("Method not allowed HTTP/1.1", response_code: 405);
@@ -193,14 +197,14 @@ class Router
         }
 
         // Gelen HTTP isteğine göre ilgili rotaları çağırır.
-        foreach ($this->router[Request::method()] as $callback) {
+        foreach ($this->router[$this->request->getMethod()] as $callback) {
             $parameters = [];
 
-            if (false !== strpos(Request::uri(), '?')) {
-                $callback->query = strstr(Request::uri(), '?');
+            if (false !== strpos($this->request->getRequestUri(), '?')) {
+                $callback->query = strstr($this->request->getRequestUri(), '?');
             }
             // Rotayı hazırlanan düzenli ifadeyle eşleştirmeye çalışır
-            if (preg_match("@" . $callback->regexpURL . "$@", $this->request->url, $parameters)) {
+            if (preg_match("@" . $callback->regexpURL . "$@", $this->request->getRequestUri(), $parameters)) {
 
                 // ilk parametre url'in tamamı olduğu için ilk değeri silmek zorunda.
                 array_shift($parameters);
@@ -213,15 +217,28 @@ class Router
 
                 // $callback eğer diziyse yani bu controller ve method oluyor
                 // ona göre aksiyon alıyor.
-
                 if (is_string($callback->action)) {
-                    return new Method($this->namespace, $callback->action, $methodParameters);
+                    return (new Response())
+                        ->setContent(
+                            (new CallController(
+                                $this->namespace, 
+                                $callback->action, $methodParameters
+                                )
+                                )->dispatch()
+                                )->send();
                 } else {
                     return (new ReflectionFunction($callback->action))->invokeArgs($methodParameters);
                 }
             }
         }
-        throw new NotRouteFound(sprintf("%s not found", $this->request->url), 404);
+
+        $response->setContent(sprintf("%s not found", $this->request->getRequestUri()));
+        $response->headers->set('Content-Type', 'text/html');
+        $response->setStatusCode(404);
+        
+        return $response->send();
+        
+        //throw new NotRouteFound(sprintf("%s not found", $this->request->getRequestUri()), 404);
     }
 
 

@@ -13,7 +13,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "tests\\": "tests/",
+            "Tests\\": "tests/",
             "App\\": "app/"
         }
     },
@@ -24,6 +24,10 @@
     "minimum-stability": "dev",
     "require-dev": {
         "symfony/var-dumper": "*",
-        "phpunit/phpunit": "10.0.x-dev"
+        "phpunit/phpunit": "10.0.x-dev",
+        "guzzlehttp/guzzle": "7.4.x-dev"
+    },
+    "require": {
+        "symfony/http-foundation": "6.1.x-dev"
     }
 }
