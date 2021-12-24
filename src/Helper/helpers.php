@@ -1,9 +1,8 @@
 <?php
 
-use ahmetbarut\PhpRouter\Exception\ArgsException;
 use ahmetbarut\PhpRouter\Exception\NotRouteFound;
-use ahmetbarut\PhpRouter\Request\Request;
 use ahmetbarut\PhpRouter\Router\Router;
+use symfony\Component\HttpFoundation\Request;
 
 /**
  * Dizgedeki ilk karakteri yoksayar ve dizge 2. karakterden itibaren kabul edilir
@@ -30,20 +29,22 @@ function rm_first_letter(array|string $str)
  * @param array|null $parameters
  * @param boolean $absolute
  * @return string
+ * @throws NotRouteFound
+ * @throws ErrorException
  */
-function path(string $name, ?array $parameters = [], bool $absolute = true)
+function path(string $name, ?array $parameters = [], bool $absolute = true): string
 {
     $router = Router::routes($name);
     $uri = "";
 
-    if (false === $router && empty($router)) {
+    if (false === $router) {
         throw new NotRouteFound(sprintf("[%s] Not Found.", $name));
     }
     if (count((array) $router->parameters) !== count($parameters)) {
         throw new ErrorException(sprintf("Parametter is null, expected parameter %s, given parameter %s", count((array) $router->parameters), count($parameters)), 500);
     }
     if ($absolute) {
-        $uri = Request::httpReferer() . str_replace($router->parameters, $parameters, $router->uri);
+        $uri = Request::createFromGlobals()->getPathInfo() . '/' . str_replace($router->parameters, $parameters, $router->uri);
     } else {
         $uri = str_replace($router->parameters, $parameters, $router->uri);
     }

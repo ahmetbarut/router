@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace ahmetbarut\PhpRouter\Router;
 
-use ahmetbarut\PhpRouter\{
-    Exception\NotRouteFound,
-    Reflection\Method,
-};
+use ErrorException;
+use ahmetbarut\PhpRouter\{Exception\NotRouteFound, Middleware\Middleware, Reflection\Method};
 use ahmetbarut\PhpRouter\Reflection\CallController;
+use ReflectionException;
 use Symfony\Component\HttpFoundation\Request;
 
 use Closure;
@@ -69,6 +68,21 @@ class Router
 
     protected $group = "";
 
+    public $middleware;
+    public $middlewareParams;
+
+    protected $errors = [
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        500 => "Internal Server Error",
+        501 => "Not Implemented",
+        502 => "Bad Gateway",
+        503 => "Service Unavailable",
+    ];
+
     public function __construct($options = [])
     {
         $this->route = new Route;
@@ -94,7 +108,7 @@ class Router
      * @param array|Closure $callback
      * @return static
      */
-    public function get($uri,  string|Closure $callback)
+    public function get(string $uri, string|Closure $callback): static
     {
         $this->addHandler("GET", $uri, $callback);
         $this->path = $uri;
@@ -102,21 +116,14 @@ class Router
         return $this;
     }
 
-    public function name($name)
-    {
-        $this->route->name($name);
-        static::$nameList[$name] = clone $this->route;
-        return $this;
-    }
-
     /**
      * HTTP POST yönteminde kullanılır
      *
      * @param string $uri
-     * @param array|Closure $callback
-     * @return void
+     * @param string|Closure $callback
+     * @return Router
      */
-    public function post($uri, string|Closure $callback)
+    public function post(string $uri, string|Closure $callback): static
     {
         $this->addHandler("POST", $uri, $callback);
         $this->path = $uri;
@@ -142,7 +149,7 @@ class Router
      * @param array|Closure $callback
      * @return void
      */
-    public function put($uri, array|Closure $callback)
+    public function put(string $uri, array|Closure $callback)
     {
         $this->addHandler("PUT", $uri, $callback);
     }
@@ -171,36 +178,58 @@ class Router
      *
      * @param string $method
      * @param string $path
-     * @param array|Closure $callback
-     * @return static
+     * @param string|Closure $callback
+     * @return void
      */
-    private function addHandler($method, $path, $callback)
+    private function addHandler(string $method, string $path, string|Closure $callback): void
     {
 
-        $this->router[$method][rtrim($path, "/") == "" ? "/" : rtrim($path, "/")]
-            = clone $this->route->addRoute($path, $callback, $this->namespace, $this->group);
+        $this
+            ->router[$method]
+                    [rtrim($path, "/") == "" ? "/" : rtrim($path, "/")] =
+                    clone $this->route->addRoute($path, $callback, $this->namespace, $this->group);
+    }
+
+    /**
+     * Set middleware for route.
+     * @param string $name
+     * @return $this
+     */
+    public function middleware(string $name, ...$parameters): static
+    {
+        $this->middleware = $name;
+        $this->middlewareParams = $parameters;
+        return $this;
+    }
+
+    public function name($name): void
+    {
+        ($this->route->name($name, $this->middleware, $this->middlewareParams));
+        static::$nameList[$name] = clone $this->route;
     }
 
     /**
      * Rotaları çalıştırır
-     * @return \ahmetbarut\PhpRouter\Reflection\Method
+     * @return Response
+     * @throws ReflectionException|ErrorException
      */
-    public function run()
+    public function run(): Response
     {
         $response = new Response();
         
         if (!in_array($this->request->getMethod(), array_keys($this->router))) {
-            http_response_code(405);
+            $response->headers->set("Content-Type", "text/html");
+            $response->setContent($this->errors[405]);
+            $response->setStatusCode(405);
 
-            header("Method not allowed HTTP/1.1", response_code: 405);
-            exit;
+            return $response->send();
         }
 
         // Gelen HTTP isteğine göre ilgili rotaları çağırır.
         foreach ($this->router[$this->request->getMethod()] as $callback) {
             $parameters = [];
 
-            if (false !== strpos($this->request->getRequestUri(), '?')) {
+            if (str_contains($this->request->getRequestUri(), '?')) {
                 $callback->query = strstr($this->request->getRequestUri(), '?');
             }
             // Rotayı hazırlanan düzenli ifadeyle eşleştirmeye çalışır
@@ -214,11 +243,10 @@ class Router
 
                 // Yöntemin ve rotanın parametrelerini birleştirir.
                 $methodParameters = array_combine($routeParameters, $parameters);
-
                 // $callback eğer diziyse yani bu controller ve method oluyor
                 // ona göre aksiyon alıyor.
                 if (is_string($callback->action)) {
-                    return (new Response())
+                    $response
                         ->setContent(
                             (new CallController(
                                 $this->namespace, 
@@ -227,7 +255,7 @@ class Router
                                 )->dispatch()
                                 )->send();
                 } else {
-                    return (new ReflectionFunction($callback->action))->invokeArgs($methodParameters);
+                    $response->setContent((new ReflectionFunction($callback->action))->invokeArgs($methodParameters))->send();
                 }
             }
         }
@@ -240,7 +268,6 @@ class Router
         
         //throw new NotRouteFound(sprintf("%s not found", $this->request->getRequestUri()), 404);
     }
-
 
     public static function routes($name)
     {

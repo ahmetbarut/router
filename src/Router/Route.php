@@ -2,7 +2,8 @@
 
 namespace ahmetbarut\PhpRouter\Router;
 
-use ahmetbarut\PhpRouter\Request\Request;
+use ahmetbarut\PhpRouter\Middleware\Middleware;
+use Closure;
 
 class Route
 {
@@ -16,9 +17,9 @@ class Route
     /**
      * Store route action
      *
-     * @var string|\Closure
+     * @var string|Closure
      */
-    public string|\Closure $action;
+    public string|Closure $action;
 
     /**
      * Store route uri.
@@ -46,7 +47,7 @@ class Route
      *
      * @var string
      */
-    public $namespace;
+    public string $namespace;
 
     /**
      * Store route group name.
@@ -55,16 +56,18 @@ class Route
      */
     public string $group;
 
+    public Middleware $middleware;
+
     /**
      * Store route parameters.
      *
      * @param string $path
-     * @param string|\Closure $callback
+     * @param string|Closure $callback
      * @param string $namespace
      * @param string $group
      * @return static
      */
-    public function addRoute(string $path, string | \Closure $callback, string $namespace = "", string $group = "")
+    public function addRoute(string $path, string|Closure $callback, string $namespace = "", string $group = ""): static
     {
         // Ready to edit and prepare according to the given regular expressions
         $path = rtrim($path, "/") === "" ? "/" : rtrim($path, "/");
@@ -90,19 +93,24 @@ class Route
      * @param string $name
      * @return static
      */
-    public function name(string $name)
+    public function name(string $name, $middleware, $middlewareParams)
+    {
+        $this->name = $name;
+        $this->middleware = new Middleware($middleware,$this ,$middlewareParams);
+        return $this;
+    }
+    public function middleware(string $name)
     {
         $this->name = $name;
         return $this;
     }
-
     /**
      * Set route action.
      *
-     * @param string|\Closure $action
+     * @param string|Closure $action
      * @return static
      */
-    protected function action(string|\Closure $action): static
+    protected function action(string|Closure $action): static
     {
         $this->action = $action;
         return $this;
@@ -116,10 +124,8 @@ class Route
      */
     public function group(string $group): static
     {
-        if (null !== $group) {
-            $this->regexpURL = rtrim($group, '/') . '/' . ltrim($this->regexpURL, '/');
-            $this->group = $group;
-        }
+        $this->regexpURL = rtrim($group, '/') . '/' . ltrim($this->regexpURL, '/');
+        $this->group = $group;
         return $this;
     }
 
